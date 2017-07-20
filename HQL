@@ -1,0 +1,32 @@
+1. TABLE: temporary and external and location?
+	1)temporary +　external + location
+	  start session:
+		create temporary external table `te`(id int, name string) location 'hdfs://internal0/user/hive/external/te';
+		load data ...
+	  end session.
+	  start session:
+	    table te is not exists, but location directory is exists.
+****2)temporary 
+	  start session:
+		create temporary table `te`(id int, name string);
+		insert into table te values(1,'allen'),(2,'koby'),(3,'wade');
+		data loc:
+			'hdfs://internal0/tmp/hive/jiyuan/4e223cc5-9c85-4ad8-bb69-71d60c25f64e/_tmp_space.db/Values__Tmp__Table__1/data_file'
+	  end session.
+	  start session:
+	    table te is not exists, and that data loc is not exists.
+		
+2. EXPORT DATA: generates many files rather than several big files?
+	INSERT OVERWRITE statements to HDFS filesystem directories are the best way to extract large amounts of data from Hive. Hive can write to HDFS directories in parallel from within a map-reduce job.
+	e.g.
+	HDFS: 1file
+		hive> insert overwrite directory 'hdfs://internal0/user/hive/external/test' select * from fudan_novel_info;
+		hive> dfs -ls hdfs://internal0/user/hive/external/test;
+		Found 1 items
+		-rwxr-xr-x   1 jiyuan supergroup     251794 2017-07-20 16:57 hdfs://internal0/user/hive/external/test/000000_0
+	LOCAL: 3files
+		hive> insert overwrite local directory '/home/jiyuan/new_project_rjdai/07202017/test' select * from fudan_novel_info;
+		hive> !ls /home/jiyuan/new_project_rjdai/07202017/test;
+		000000_0
+		000001_0
+		000002_0
