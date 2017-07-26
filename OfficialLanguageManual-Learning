@@ -1,1 +1,149 @@
+1.
+2. The default behavior is RESTRICT, where DROP DATABASE will fail if the database is not empty. 
+  To drop the tables in the database as well, use DROP DATABASE ... CASCADE.
+  USAGE:
+  DROP (DATABASE|SCHEMA) [IF EXISTS] database_name [RESTRICT|CASCADE];
+3. To check which database is currently being used: SELECT current_database() 
+4. Enable delete,update...
+  http://www.aboutyun.com/thread-12155-1-1.html
+  https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions#HiveTransactions-TableProperties
+
+  If a table is to be used in ACID writes (insert, update, delete) then the table property "transactional=true" must be set on that table, starting with Hive 0.14.0. Note, once a table has been defined as an ACID table via TBLPROPERTIES ("transactional"="true"), it cannot be converted back to a non-ACID table, i.e., changing TBLPROPERTIES ("transactional"="false") is not allowed. 
+  Also, hive.txn.manager must be set to org.apache.hadoop.hive.ql.lockmgr.DbTxnManager either in hive-site.xml or in the beginning of the session before any query is run. 
+  Without those, inserts will be done in the old style; updates and deletes will be prohibited prior to HIVE-11716.  
+  Since HIVE-11716 operations on ACID tables without DbTxnManager are not allowed.  
+  However, this does not apply to Hive 0.13.0.
+
+5.调试hive运行时，单独设置日志：
+  hive --hiveconf hive.root.logger=DEBUG,console
+
+
+1. Any column name that is specified within backticks (`) is treated literally. Within a backtick string, use double backticks (``) to represent a backtick character. 
+  Backtick quotation also enables the use of reserved keywords for table and column identifiers.
+2. To find out if a table is managed or external, look for tableType in the output of DESCRIBE EXTENDED|FORMATTED table_name.
+  e.g.
+    hive> describe extended fgvdu;
+    Detailed Table Information(..., tableType:MANAGED_TABLE)
+    hive> describe formatted fgvdu;
+    # Detailed Table Information
+    Table Type:             MANAGED_TABLE
+3. The TBLPROPERTIES clause allows you to tag the table definition with your own metadata key/value pairs.
+4. As of Hive 0.13.0, a table can be made immutable by creating it with TBLPROPERTIES ("immutable"="true"). 
+  The default is "immutable"="false".
+  INSERT INTO behavior into an immutable table is disallowed if any data is already present, although INSERT INTO still works if the immutable table is empty. 
+  The behavior of INSERT OVERWRITE is not affected by the "immutable" table property.
+  An immutable table is protected against accidental updates due to a script loading data into it being run multiple times by mistake. 
+  The first insert into an immutable table succeeds and successive inserts fail, resulting in only one set of data in the table, instead of silently succeeding with multiple copies of the data in the table. 
+  e.g.
+    hive> create temporary table test_tbl(id int,name string) row format delimited fields terminated by '\t' tblproperties("immutable"="true");
+    OK
+    Time taken: 0.274 seconds
+    hive> insert into table test_tbl values(1,'allen'),(2,'kobe'),(3,'wade');
+    OK
+    Time taken: 21.24 seconds
+    hive> select * from test_tbl;
+    OK
+    1       allen
+    2       kobe
+    3       wade
+    Time taken: 0.093 seconds, Fetched: 3 row(s)
+    hive> insert into table test_tbl values(1,'allen'),(2,'kobe'),(3,'wade');
+    FAILED: SemanticException [Error 10256]: Inserting into a non-empty immutable table is not allowed test_tbl
+5.TBLPROPERTIES ("auto.purge"="true") or ("auto.purge"="false") in release 1.2.0+ .
+    Apply for: Drop Table, Drop Partitions, Truncate Table, and Insert Overwrite.
+    e.g.
+    DROP TABLE [IF EXISTS] table_name [PURGE];     -- (Note: PURGE available in Hive 0.14.0 and later)
+    If PURGE is specified, the table data does not go to the .Trash/Current directory and so cannot be retrieved in the event of a mistaken DROP. 
+    The purge option can also be specified with the table property auto.purge (see TBLPROPERTIES above).
+6.TBLPROPERTIES ("EXTERNAL"="TRUE") in release 0.6.0+ (HIVE-1329) – Change a managed table to an external table and vice versa for "FALSE".
+  As of Hive 2.4.0 (HIVE-16324) the value of the property 'EXTERNAL' is parsed as a boolean (case insensitive true or false) instead of a case sensitive string comparison.
+7.WHEN use managed table:
+  Use managed tables when Hive should manage the lifecycle of the table, or when generating temporary tables.
+8. Use external tables when files are already present or in remote locations, and the files should remain even if the table is dropped.
+9. If the structure or partitioning of an external table is changed, an MSCK REPAIR TABLE table_name statement can be used to refresh metadata information.
+  Recover Partitions (MSCK REPAIR TABLE)
+  Hive stores a list of partitions for each table in its metastore. 
+  If, however, new partitions are directly added to HDFS (say by using hadoop fs -put command), the metastore (and hence Hive) will not be aware of these partitions unless the user runs ALTER TABLE table_name ADD PARTITION commands on each of the newly added partitions.
+  However, users can run a metastore check command with the repair table option:
+  MSCK REPAIR TABLE table_name;which will add metadata about partitions to the Hive metastore for partitions for which such metadata doesn't already exist. 
+  In other words, it will add any partitions that exist on HDFS but not in metastore to the metastore. See HIVE-874 for more details. 
+  When there is a large number of untracked partitions, there is a provision to run MSCK REPAIR TABLE batch wise to avoid OOME (Out of Memory Error). By giving the configured batch size for the property hive.msck.repair.batch.size it can run in the batches internally. The default value of the property is zero, it means it will execute all the partitions at once.
+  e.g.
+    hive> create external table test_msck(id int,name string) partitioned by(class string) row format delimited fields terminated by '\t' location '/user/hive/external/test_msck';
+    OK
+    Time taken: 0.172 seconds
+    hive> insert into table test_msck partition(class="top1") values(1,'allen'),(2,'kobe'),(3,'wade');
+    OK
+    Time taken: 18.411 seconds
+    hive> dfs -ls /user/hive/external/test_msck;
+    Found 1 items
+    drwxr-xr-x   - jiyuan supergroup          0 2017-07-25 16:28 /user/hive/external/test_msck/class=top1
+    hive> dfs -cp /user/hive/external/test_msck/class=top1/000000_0 /user/hive/external/test_msck/class=top2/000000_0;
+    hive> dfs -ls /user/hive/external/test_msck/;
+    Found 2 items
+    drwxr-xr-x   - jiyuan supergroup          0 2017-07-25 16:28 /user/hive/external/test_msck/class=top1
+    drwxr-xr-x   - jiyuan supergroup          0 2017-07-25 16:31 /user/hive/external/test_msck/class=top2
+    hive> select * from test_msck where class = "top1";
+    OK
+    1       allen   top1
+    2       kobe    top1
+    3       wade    top1
+    Time taken: 0.118 seconds, Fetched: 3 row(s)
+    hive> select * from test_msck where class = "top2";
+    OK
+    Time taken: 0.125 seconds
+    hive> msck repair table test_msck;
+    OK
+    Partitions not in metastore:    test_msck:class=top2
+    Repair: Added partition to metastore test_msck:class=top2
+    Time taken: 0.188 seconds, Fetched: 2 row(s)
+10. storage format comparation: sequenceFile and rcFile:
+  参考《hadoop权威指南》474page
+  当我们查询表的某一行中确定某列时：
+  sequenceFileTBL 会将这一个列值前面所有行所有列的字节都加载到内存中，但是由于“迟反序列化”策略（lazy deserialization）只反序列化确定的哪一个列值。
+  rcFileTBL 只会加载这一列中所有的值到内存中。比sequence文件节省内存空间。
+  create table tblname1 
+    stored as sequencefile;
+  create table tblname2 
+    row format serde 'org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe' 
+    stored as rcfile;
+  e.g.
+    Table fudan_novel_info exsits.
+    hive> create table demo_sequence_storaged stored as sequencefile as select * from fudan_novel_info exsits;
+    OK
+    hive> create table demo_storage_rcfile row format serde 'org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe' stored as rcfile as select * from fudan_novel_info;
+    OK
+    hive> select chapter_name from demo_sequence_storaged where chapter_name = '又被退婚&nbsp&nbsp&nbsp在梦里也要解气';
+    OK
+    又被退婚&nbsp&nbsp&nbsp在梦里也要解气
+    又被退婚&nbsp&nbsp&nbsp在梦里也要解气
+    Time taken: 0.599 seconds, Fetched: 2 row(s)
+    hive> select chapter_name from demo_storage_rcfile where chapter_name = '又被退婚&nbsp&nbsp&nbsp在梦里也要解气';
+    OK
+    又被退婚&nbsp&nbsp&nbsp在梦里也要解气
+    又被退婚&nbsp&nbsp&nbsp在梦里也要解气
+    Time taken: 0.129 seconds, Fetched: 2 row(s)
+    So,sequence:0.599,rc:0.129.4.6倍。rcFile 查询某一列的值时会快很多并且节省内存空间。
+    
+11.EXPORT DATA: 
+	e.g.
+    HDFS(INSERT): 1file
+      hive> insert overwrite directory 'hdfs://internal0/user/hive/external/test' select * from fudan_novel_info;
+      hive> dfs -ls hdfs://internal0/user/hive/external/test;
+      Found 1 items
+      -rwxr-xr-x   1 jiyuan supergroup     251794 2017-07-20 16:57 hdfs://internal0/user/hive/external/test/000000_0
+    LOCAL（INSERT）: 3files
+      hive> insert overwrite local directory '/home/jiyuan/new_project_rjdai/07202017/test' select * from fudan_novel_info;
+      hive> !ls /home/jiyuan/new_project_rjdai/07202017/test;
+      000000_0
+      000001_0
+      000002_0
+      INFO: generates many files rather than several big files?INSERT OVERWRITE statements to HDFS filesystem directories are the best way to extract large amounts of data from Hive. Hive can write to HDFS directories in parallel from within a map-reduce job.
+    Download data:
+      hdfs dfs -get hdfs://internal0/user/hive/external/test/000000_0;
+      INFO:Download method just download raw data within create storage file format,such as: testfile,sequencefile,rcfile...
+    Shell Script:
+      hive -e 'select * from db.test;' > /localdir
+      
+
 
