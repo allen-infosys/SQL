@@ -153,7 +153,7 @@
 					ORC (Hive 0.11 and later)
 					RegEx
 					Thrift
-					Parquet (Hive 0.13 and later)
+					Parquet (Hive 0.13 and later) Referto:https://cwiki.apache.org/confluence/display/Hive/Parquet#Parquet-Introduction
 					CSV (Hive 0.14 and later)
 					JsonSerDe (Hive 0.12 and later in hcatalog-core)
 				custom SerDes
@@ -168,3 +168,178 @@ textfile 		 存储空间消耗比较大，并且压缩的text 无法分割和合
 sequencefile 存储空间消耗最大,压缩的文件可以分割和合并 需要通过text文件转化来加载
 rcfile 			 存储空间小，查询的效率高 ，需要通过text文件转化来加载，加载的速度最低
 orc 				 存储空间最小，查询的最高 ，需要通过text文件转化来加载，加载的速度最低（个人建议使用orc）
+13.partition column:
+	hive既可以有一个字段在数据中，又可以有一个字段当做分区表，这两个字段是同一个字段，只不过是不同名称：
+	If, when creating a partitioned table, you get this error: "FAILED: Error in semantic analysis: Column repeated in partitioning columns," 
+	it means you are trying to include the partitioned column in the data of the table itself. 
+	You probably really do have the column defined. However, the partition you create makes a pseudocolumn on which you can query, 
+	so you must rename your table column to something else (that users should not query on!).
+	For example, suppose your original unpartitioned table had three columns: id, date, and name.
+	Example:
+		id     int,
+		date   date,
+		name   varchar
+	Now you want to partition on date. Your Hive definition could use "dtDontQuery" as a column name so that "date" can be used for partitioning (and querying).
+	Example:
+		create table table_name (
+			id                int,
+			dtDontQuery       string,
+			name              string
+		)
+		partitioned by (date string)；
+	Now your users will still query on "where date = '...'" but the second column dtDontQuery will hold the original values.
+14.External Tables
+	The EXTERNAL keyword lets you create a table and provide a LOCATION so that Hive does not use a default location for this table. 
+	This comes in handy if you already have data generated. 
+	@@When dropping an EXTERNAL table, data in the table is NOT deleted from the file system.
+
+15.CTAS
+	Being able to select data from one table to another is one of the most powerful features of Hive.
+	1）
+	The table created by CTAS is atomic, meaning that the table is not seen by other users until all the query results are populated. 
+	So other users will either see the table with the complete results of the query or will not see the table at all.
+	e.g.
+		hive> create table demo_ctas as select * from fudan_novel_info where lol='hah';
+		FAILED: SemanticException [Error 10004]: Line 1:63 Invalid table alias or column reference 'lol': (possible column names are: novel_word_count, novel_reward_url, novel_style, novel_name, novel_code, novel_url, novel_collect_count, novel_review_url, novel_site, chapter_name, novel_author, novel_collect_url, novel_flag, novel_update_date, novel_vote_url, novel_state, novel_view, chapter_url, novel_type)
+		hive> show tables;
+		OK
+		fudan_novel_info
+		Time taken: 0.029 seconds, Fetched: 5 row(s)
+	Node:select statement failed so all failed.
+@However,if select statement return a null res, and the table will created with null.
+	e.g.
+		hive> create table demo_ctas as select * from fudan_novel_info where novel_name = "齐天大圣";
+		maplog
+		...
+		OK
+		Time taken: 22.732 seconds
+		hive> show tables;
+		OK
+		demo_ctas
+		fudan_novel_info
+		Time taken: 0.029 seconds, Fetched: 6 row(s)
+		hive> select * from demo_ctas;
+		OK
+		Time taken: 0.139 seconds
+		2）
+		The CREATE part of the CTAS takes the resulting schema from the SELECT part and creates the target table with other table properties such as the SerDe and storage format.
+		 In addition, the new target table is created using a specific SerDe and a storage format independent of the source tables in the SELECT statement.
+		e.g.
+			CREATE TABLE new_key_value_store
+			ROW FORMAT SERDE "org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe"
+			STORED AS RCFile
+				AS
+			SELECT (key % 1024) new_key, concat(key, value) key_value_pair
+			FROM key_value_store
+			SORT BY new_key, key_value_pair;
+@@@	3）restrictions
+		CTAS has these restrictions:
+    The target table cannot be a partitioned table.
+    The target table cannot be an external table.
+    The target table cannot be a list bucketing table.
+16.Bucketed Sorted Tables
+	1）创建
+		referto:
+			https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL+BucketedTables
+			https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL
+			《hadoop权威指南》p468
+@@@Such an organization allows the user to do efficient sampling on the clustered column. 
+		Example:
+			CREATE TABLE page_view(viewTime INT, userid BIGINT,
+					 page_url STRING, referrer_url STRING,
+					 ip STRING COMMENT 'IP Address of the User')
+			 COMMENT 'This is the page view table'
+			 PARTITIONED BY(dt STRING, country STRING)
+			 CLUSTERED BY(userid) SORTED BY(viewTime) INTO 32 BUCKETS
+			 ROW FORMAT DELIMITED
+				 FIELDS TERMINATED BY '\001'
+				 COLLECTION ITEMS TERMINATED BY '\002'
+				 MAP KEYS TERMINATED BY '\003'
+			 STORED AS SEQUENCEFILE;
+		In the example above, the page_view table is bucketed (clustered by) userid and within each bucket the data is sorted in increasing order of viewTime. 
+		The sorting property allows internal operators to take advantage of the better-known data structure while evaluating queries, also increasing efficiency. 
+		MAP KEYS and COLLECTION ITEMS keywords can be used if any of the columns are lists or maps.
+		The CLUSTERED BY and SORTED BY creation commands do not affect how data is inserted into a table – only how it is read. 
+		This means that users must be careful to insert data correctly by specifying the number of reducers to be equal to the number of buckets, and using CLUSTER BY and SORT BY commands in their query.but,
+		@ Version 0.x and 1.x only:The command set hive.enforce.bucketing = true; allows the correct number of reducers and the cluster by column to be automatically selected based on the table. 
+		Otherwise, you would need to set the number of reducers to be the same as the number of buckets as in set mapred.reduce.tasks = 256; and have a CLUSTER BY ... clause in the select.
+
+	2）查询
+		referto；
+			https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Sampling
+		select ... from ...table_sample;
+		table_sample;: TABLESAMPLE (BUCKET x OUT OF y [ON colname])
+@@@The TABLESAMPLE clause allows the users to write queries for samples of the data instead of the whole table. 
+		The TABLESAMPLE clause can be added to any table in the FROM clause.
+		Note:非桶表也可以使用这个表达式，语法不出错，但是必须加上ON colname，而桶表可以不用加，
+		In the following example the 3rd bucket out of the 32 buckets of the table source. 's' is the table alias.
+				SELECT * FROM source TABLESAMPLE(BUCKET 3 OUT OF 32 ON rand()) s;
+@@ Input pruning: Typically, TABLESAMPLE will scan the entire table and fetch the sample. But, that is not very efficient. Instead, the table can be created with a CLUSTERED BY clause which indicates the set of columns on which the table is hash-partitioned/clustered on. If the columns specified in the TABLESAMPLE clause match the columns in the CLUSTERED BY clause, TABLESAMPLE scans only the required hash-partitions of the table.
+		Example:
+			So in the above example, if table 'source' was created with 'CLUSTERED BY id INTO 32 BUCKETS'
+				TABLESAMPLE(BUCKET 3 OUT OF 16 ON id)
+			would pick out the 3rd and 19th clusters as each bucket would be composed of (32/16)=2 clusters.
+			On the other hand the tablesample clause
+				TABLESAMPLE(BUCKET 3 OUT OF 64 ON id)
+			would pick out half of the 3rd cluster as each bucket would be composed of (32/64)=1/2 of a cluster.
+17.Skewed Tables
+ Skewed Join Optimization：
+ 		https://cwiki.apache.org/confluence/display/Hive/Skewed+Join+Optimization
+ List Bucketing:
+ 		https://cwiki.apache.org/confluence/display/Hive/ListBucketing
+@@@This feature can be used to improve performance for tables where one or more columns have skewed values. 
+@@@By specifying the values that appear very often (heavy skew) Hive will split those out into separate files (or directories in case of list bucketing) automatically and take this fact into account during queries so that it can skip or include the whole file (or directory in case of list bucketing) if possible.
+e.g.
+	hive> create temporary table demo_skew(id string, name string) skewed by (name) on ('allen','kobe') stored as directories;
+	hive> insert into table demo_skew values ("01","allen"), ("02","allen"), ("03","allen"), ("04","allen"), ("05","kobe"), ("06","kobe"), ("07","kobe"), ("08","wade"), ("09","thomas"), ("10","james"), ("11","jordan");
+	hive> dfs -ls /tmp/hive/jiyuan/8a310dec-7463-42ad-af6e-1be8fb54615d/_tmp_space.db/ba46276d-a6ea-4d92-adf7-6add1a1dab67;
+	Found 3 items
+	drwx------   - jiyuan supergroup          0 2017-07-27 16:27 /tmp/hive/jiyuan/8a310dec-7463-42ad-af6e-1be8fb54615d/_tmp_space.db/ba46276d-a6ea-4d92-adf7-6add1a1dab67/HIVE_DEFAULT_LIST_BUCKETING_DIR_NAME
+	drwx------   - jiyuan supergroup          0 2017-07-27 16:27 /tmp/hive/jiyuan/8a310dec-7463-42ad-af6e-1be8fb54615d/_tmp_space.db/ba46276d-a6ea-4d92-adf7-6add1a1dab67/name=allen
+	drwx------   - jiyuan supergroup          0 2017-07-27 16:27 /tmp/hive/jiyuan/8a310dec-7463-42ad-af6e-1be8fb54615d/_tmp_space.db/ba46276d-a6ea-4d92-adf7-6add1a1dab67/name=kobe
+	hive> dfs -ls  /tmp/hive/jiyuan/8a310dec-7463-42ad-af6e-1be8fb54615d/_tmp_space.db/ba46276d-a6ea-4d92-adf7-6add1a1dab67/name=allen;
+	Found 1 items
+	-rwx------   1 jiyuan supergroup         36 2017-07-27 16:27 /tmp/hive/jiyuan/8a310dec-7463-42ad-af6e-1be8fb54615d/_tmp_space.db/ba46276d-a6ea-4d92-adf7-6add1a1dab67/name=allen/000000_0
+	hive> dfs -text /tmp/hive/jiyuan/8a310dec-7463-42ad-af6e-1be8fb54615d/_tmp_space.db/ba46276d-a6ea-4d92-adf7-6add1a1dab67/name=allen/000000_0;
+	01allen
+	02allen
+	03allen
+	04allen
+e.g.2
+	And here is an example of a table with two skewed columns.
+	Example:
+	CREATE TABLE list_bucket_multiple (col1 STRING, col2 int, col3 STRING)
+		SKEWED BY (col1, col2) ON (('s1',1), ('s3',3), ('s13',13), ('s78',78)) [STORED AS DIRECTORIES];
+		
+18.Temporary Tables
+	@@@A table that has been created as a temporary table will only be visible to the current session. Data will be stored in the user's scratch directory, and deleted at the end of the session.
+	note:If a temporary table is created with a database/table name of a permanent table which already exists in the database, then within that session any references to that table will resolve to the temporary table, rather than to the permanent table. The user will not be able to access the original table within that session without either dropping the temporary table, or renaming it to a non-conflicting name.
+	limitations:
+			Partition columns are not supported.
+			No support for creation of indexes.
+	Starting in Hive 1.1.0 the storage policy for temporary tables can be set to memory, ssd, or default with the hive.exec.temporary.table.storage configuration parameter.
+			hive.exec.temporary.table.storage
+					Default Value: default
+					Added In: Hive 1.1.0 with HIVE-7313
+			Expects one of [memory, ssd, default].
+			Define the storage policy for temporary tables. Choices between memory, ssd and default.
+19.Constraints
+	Status:ing...
+		Version information
+		As of Hive 2.1.0 (HIVE-13290).
+		Hive includes support for non-validated primary and foreign key constraints. Some SQL tools generate more efficient queries when constraints are present. Since these constraints are not validated, an upstream system needs to ensure data integrity before it is loaded into Hive.
+		Example:
+		create table pk(id1 integer, id2 integer,
+			primary key(id1, id2) disable novalidate);
+		create table fk(id1 integer, id2 integer,
+			constraint c1 foreign key(id1, id2) references pk(id2, id1) disable novalidate);
+
+
+
+
+
+
+
+
+
+
