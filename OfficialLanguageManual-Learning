@@ -333,13 +333,60 @@ e.g.2
 			primary key(id1, id2) disable novalidate);
 		create table fk(id1 integer, id2 integer,
 			constraint c1 foreign key(id1, id2) references pk(id2, id1) disable novalidate);
+20.Drop table
+		DROP TABLE [IF EXISTS] table_name [PURGE];     -- (Note: PURGE available in Hive 0.14.0 and later)
+	DROP TABLE removes metadata and data for this table. 
+	@@The data is actually moved to the .Trash/Current directory if Trash is configured (and PURGE is not specified). The metadata is completely lost.
+	@@When dropping an EXTERNAL table, data in the table will NOT be deleted from the file system.
+	@@ RECOVER TABLE:Users who mistakenly DROP TABLEs may  be able to recover their lost data by recreating a table with the same schema, recreating any necessary partitions, and then moving the data back into place manually using Hadoop. This solution is subject to change over time or across installations as it relies on the underlying implementation; users are strongly encouraged not to drop tables capriciously.
+	If PURGE is specified, the table data does not go to the .Trash/Current directory and so cannot be retrieved in the event of a mistaken DROP. The purge option can also be specified with the table property auto.purge (see TBLPROPERTIES above).
+	In Hive 0.7.0 or later, DROP returns an error if the table doesn't exist, unless IF EXISTS is specified or the configuration variable hive.exec.drop.ignorenonexistent is set to true.
+21.Truncate Table
+	TRUNCATE TABLE table_name [PARTITION partition_spec];
+	partition_spec:
+ 	 : (partition_column = partition_col_value, partition_column = partition_col_value, ...)
+	 The rows will be trashed if the filesystem Trash is enabled, otherwise they are deleted (as of Hive 2.2.0 with HIVE-14626). 
+	 @Currently the target table should be native/managed table or an exception will be thrown. 
+	 Starting with HIVE 2.3.0 (HIVE-15880) if the table property "auto.purge" (see TBLPROPERTIES above) is set to "true" the data of the table is not moved to Trash when a TRUNCATE TABLE command is issued against it and cannot be retrieved in the event of a mistaken TRUNCATE. This is applicable only for managed tables (see managed tables). 
+	 This behavior can be turned off if the "auto.purge" property is unset or set to false for a managed table.
+22.Alter table:Rename Table
+	ALTER TABLE table_name RENAME TO new_table_name;
+	As of version 0.6, a rename on a managed table moves its HDFS location. 
+	@@ Rename has been changed as of version 2.2.0 (HIVE-14909) so that a managed table's HDFS location is moved only if the table is created without a LOCATION clause and under its database directory.
+	For external Rename just change name, but can't change hdfs.
+	e.g.
+		hive> desc formatted demo_bucket_addpartiion;
+		OK
+		...                  
+		Location:               hdfs://internal0:8020/user/hive/warehouse/s_yhb_yhbpt.db/demo_bucket_addpartiion         
+		Table Type:             MANAGED_TABLE            
+		...          
+		hive> alter table demo_bucket_addpartiion rename to demo_bucket_addpart;
+		OK
+		Time taken: 0.264 seconds
+		hive> desc formatted demo_bucket_addpart;
+		OK
+		...                                                    
+		Location:               hdfs://internal0:8020/user/hive/warehouse/s_yhb_yhbpt.db/demo_bucket_addpart     
+		Table Type:             MANAGED_TABLE            
+		...              
+23.Alter table:Alter Table Storage Properties
+	ALTER TABLE table_name CLUSTERED BY (col_name, col_name, ...) [SORTED BY (col_name, ...)]
+		INTO num_buckets BUCKETS;
+	These statements change the table's physical storage properties.
+	@@ NOTE: These commands will only modify Hive's metadata, and will NOT reorganize or reformat existing data. Users should make sure the actual data layout conforms with the metadata definition.
+24.Alter table:Alter Table Skewed
+	ALTER TABLE table_name SKEWED BY (col_name1, col_name2, ...)
+		ON ([(col_name1_value, col_name2_value, ...) [, (col_name1_value, col_name2_value), ...]
+		[STORED AS DIRECTORIES];
+	The STORED AS DIRECTORIES option determines whether a skewed table uses the list bucketing feature, which creates subdirectories for skewed values.
+	Alter Table Not Skewed
+	ALTER TABLE table_name NOT SKEWED;
+	The NOT SKEWED option makes the table non-skewed and turns off the list bucketing feature (since a list-bucketing table is always skewed). This affects partitions created after the ALTER statement, but has no effect on partitions created before the ALTER statement.
+	Alter Table Not Stored as Directories
+	ALTER TABLE table_name NOT STORED AS DIRECTORIES;
+	This turns off the list bucketing feature, although the table remains skewed.
 
-
-
-
-
-
-
-
-
-
+Problem:
+1. listbucketing
+2.
