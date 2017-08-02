@@ -386,6 +386,43 @@ e.g.2
 	Alter Table Not Stored as Directories
 	ALTER TABLE table_name NOT STORED AS DIRECTORIES;
 	This turns off the list bucketing feature, although the table remains skewed.
+25.Alter table:Exchange Partition
+	Version information
+	As of Hive 0.12 (HIVE-4095). Multiple partitions supported in Hive versions 1.2.2, 1.3.0, and 2.0.0+.
+	-- Move partition from table_name_1 to table_name_2
+	ALTER TABLE table_name_2 EXCHANGE PARTITION (partition_spec) WITH TABLE table_name_1;
+	-- multiple partitions
+	ALTER TABLE table_name_2 EXCHANGE PARTITION (partition_spec, partition_spec2, ...) WITH TABLE table_name_1;
+	@ This statement lets you move the data in a partition from a table to another table that has the same schema and does not already have that partition.
+26.Alter table:Alter Table/Partition Protections
+	ALTER TABLE table_name [PARTITION partition_spec] ENABLE|DISABLE NO_DROP [CASCADE];
+	ALTER TABLE table_name [PARTITION partition_spec] ENABLE|DISABLE OFFLINE;
+	This functionality was removed in Hive 2.0.0. This functionality is replaced by using one of the several security options available with Hive (see SQL Standard Based Hive Authorization).
+	@ Protection on data can be set at either the table or partition level. Enabling NO_DROP prevents a table from being dropped. 
+	Enabling OFFLINE prevents the data in a table or partition from being queried, but the metadata can still be accessed.
+	If any partition in a table has NO_DROP enabled, the table cannot be dropped either. 
+	Conversely, if a table has NO_DROP enabled then partitions may be dropped, but with NO_DROP CASCADE partitions cannot be dropped either unless the drop partition command specifies IGNORE PROTECTION.
+27.Alter Tabl:Alter Table/Partition Compact
+		ALTER TABLE table_name [PARTITION (partition_key = 'partition_value' [, ...])]
+			COMPACT 'compaction_type'[AND WAIT]
+			[WITH OVERWRITE TBLPROPERTIES ("property"="value" [, ...])];
+	The compaction_type can be MAJOR or MINOR. See the Basic Design section in Hive Transactions for more information.
+28.Alter Tabl:Alter Table/Partition Concatenate
+		ALTER TABLE table_name [PARTITION (partition_key = 'partition_value' [, ...])] CONCATENATE;
+	@ If the table or partition contains many small RCFiles or ORC files, then the above command will merge them into larger files. 
+	In case of RCFile the merge happens at block level whereas for ORC files the merge happens at stripe level thereby avoiding the overhead of decompressing and decoding the data.
+
+28.Alter Tabl:Add/Replace Columns
+		ALTER TABLE table_name 
+			[PARTITION partition_spec]                 
+			ADD|REPLACE COLUMNS (col_name data_type [COMMENT col_comment], ...)
+			[CASCADE|RESTRICT]      
+	ADD COLUMNS lets you add new columns to the end of the existing columns but before the partition columns.
+	REPLACE COLUMNS removes all existing columns and adds the new set of columns. This can be done only for tables with a native SerDe (DynamicSerDe, MetadataTypedColumnsetSerDe, LazySimpleSerDe and ColumnarSerDe). Refer to Hive SerDe for more information. REPLACE COLUMNS can also be used to drop columns. For example, "ALTER TABLE test_change REPLACE COLUMNS (a int, b int);" will remove column 'c' from test_change's schema.
+	ALTER TABLE ADD|REPLACE COLUMNS with CASCADE command changes the columns of a table's metadata, and cascades the same change to all the partition metadata. RESTRICT is the default, limiting column changes only to table metadata.
+@@@ ALTER TABLE ADD or REPLACE COLUMNS CASCADE will override the table partition's column metadata regardless of the table or partition's protection mode. Use with discretion.
+	The column change command will only modify Hive's metadata, and will not modify data. Users should make sure the actual data layout of the table/partition conforms with the metadata definition.
+
 
 Problem:
 1. listbucketing
