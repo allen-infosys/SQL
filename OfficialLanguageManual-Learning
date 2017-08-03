@@ -16,8 +16,6 @@
 
 5.调试hive运行时，单独设置日志：
   hive --hiveconf hive.root.logger=DEBUG,console
-
-
 1. Any column name that is specified within backticks (`) is treated literally. Within a backtick string, use double backticks (``) to represent a backtick character. 
   Backtick quotation also enables the use of reserved keywords for table and column identifiers.
 2. To find out if a table is managed or external, look for tableType in the output of DESCRIBE EXTENDED|FORMATTED table_name.
@@ -146,28 +144,28 @@
       hive -e 'select * from db.test;' > /localdir
       
 12. 存储格式，两个维度：行格式和文件格式。
-行格式  ：指行和一行中的字段如何存储。行格式的存储有SerDe定义。SerDe是，hadoop api提供的接口工具，用来进行序列化（insert ctas）和反序列化(查询)。
-				行格式有很多hadoop api借口类型：参考《hadoop权威指南》p473,例如：LazySimpleSerDe,BinarySortableSerDe,ColumnarSerDe,RegexSerDe,HBaseSerDe等。
-				Built-in SerDes
-					Avro (Hive 0.9.1 and later)
-					ORC (Hive 0.11 and later)
-					RegEx
-					Thrift
-					Parquet (Hive 0.13 and later) Referto:https://cwiki.apache.org/confluence/display/Hive/Parquet#Parquet-Introduction
-					CSV (Hive 0.14 and later)
-					JsonSerDe (Hive 0.12 and later in hcatalog-core)
-				custom SerDes
-文件格式：指一行中字段容器的格式。基本两种格式：文本文件格式，面向或者列二进制格式。
-				分类：常用:textfile(default),SEQUENCEFILE,rcfile,orc(recommend)；不常用：Avro,PARQUET;自定义:INPUTFORMAT and OUTPUTFORMAT
-行格式是针对于表数据内容在传输过程的数据格式，对数据；文件格式是针对于表数据将要存储所在的容器的格式，对文件。
-文件格式性能对比：
-referto:
-lib.csdn.net/article/hive/42004
-http://www.ccblog.cn/69.htm
-textfile 		 存储空间消耗比较大，并且压缩的text 无法分割和合并 查询的效率最低,可以直接存储，加载数据的速度最高
-sequencefile 存储空间消耗最大,压缩的文件可以分割和合并 需要通过text文件转化来加载
-rcfile 			 存储空间小，查询的效率高 ，需要通过text文件转化来加载，加载的速度最低
-orc 				 存储空间最小，查询的最高 ，需要通过text文件转化来加载，加载的速度最低（个人建议使用orc）
+	行格式  ：指行和一行中的字段如何存储。行格式的存储有SerDe定义。SerDe是，hadoop api提供的接口工具，用来进行序列化（insert ctas）和反序列化(查询)。
+					行格式有很多hadoop api借口类型：参考《hadoop权威指南》p473,例如：LazySimpleSerDe,BinarySortableSerDe,ColumnarSerDe,RegexSerDe,HBaseSerDe等。
+					Built-in SerDes
+						Avro (Hive 0.9.1 and later)
+						ORC (Hive 0.11 and later)
+						RegEx
+						Thrift
+						Parquet (Hive 0.13 and later) Referto:https://cwiki.apache.org/confluence/display/Hive/Parquet#Parquet-Introduction
+						CSV (Hive 0.14 and later)
+						JsonSerDe (Hive 0.12 and later in hcatalog-core)
+					custom SerDes
+	文件格式：指一行中字段容器的格式。基本两种格式：文本文件格式，面向或者列二进制格式。
+					分类：常用:textfile(default),SEQUENCEFILE,rcfile,orc(recommend)；不常用：Avro,PARQUET;自定义:INPUTFORMAT and OUTPUTFORMAT
+	行格式是针对于表数据内容在传输过程的数据格式，对数据；文件格式是针对于表数据将要存储所在的容器的格式，对文件。
+	文件格式性能对比：
+	referto:
+	lib.csdn.net/article/hive/42004
+	http://www.ccblog.cn/69.htm
+	textfile 		 存储空间消耗比较大，并且压缩的text 无法分割和合并 查询的效率最低,可以直接存储，加载数据的速度最高
+	sequencefile 存储空间消耗最大,压缩的文件可以分割和合并 需要通过text文件转化来加载
+	rcfile 			 存储空间小，查询的效率高 ，需要通过text文件转化来加载，加载的速度最低
+	orc 				 存储空间最小，查询的最高 ，需要通过text文件转化来加载，加载的速度最低（个人建议使用orc）
 13.partition column:
 	hive既可以有一个字段在数据中，又可以有一个字段当做分区表，这两个字段是同一个字段，只不过是不同名称：
 	If, when creating a partitioned table, you get this error: "FAILED: Error in semantic analysis: Column repeated in partitioning columns," 
@@ -418,11 +416,183 @@ e.g.2
 			ADD|REPLACE COLUMNS (col_name data_type [COMMENT col_comment], ...)
 			[CASCADE|RESTRICT]      
 	ADD COLUMNS lets you add new columns to the end of the existing columns but before the partition columns.
-	REPLACE COLUMNS removes all existing columns and adds the new set of columns. This can be done only for tables with a native SerDe (DynamicSerDe, MetadataTypedColumnsetSerDe, LazySimpleSerDe and ColumnarSerDe). Refer to Hive SerDe for more information. REPLACE COLUMNS can also be used to drop columns. For example, "ALTER TABLE test_change REPLACE COLUMNS (a int, b int);" will remove column 'c' from test_change's schema.
+	REPLACE COLUMNS removes all existing columns and adds the new set of columns. This can be done only for tables with a native SerDe (DynamicSerDe, MetadataTypedColumnsetSerDe, LazySimpleSerDe and ColumnarSerDe). Refer to Hive SerDe for more information. REPLACE COLUMNS can also be used to drop columns. 
+	For example, "ALTER TABLE test_change REPLACE COLUMNS (a int, b int);" will remove column 'c' from test_change's schema.
 	ALTER TABLE ADD|REPLACE COLUMNS with CASCADE command changes the columns of a table's metadata, and cascades the same change to all the partition metadata. RESTRICT is the default, limiting column changes only to table metadata.
 @@@ ALTER TABLE ADD or REPLACE COLUMNS CASCADE will override the table partition's column metadata regardless of the table or partition's protection mode. Use with discretion.
 	The column change command will only modify Hive's metadata, and will not modify data. Users should make sure the actual data layout of the table/partition conforms with the metadata definition.
+29.View
+Creation:
+	Usage:
+		CREATE VIEW [IF NOT EXISTS] [db_name.]view_name [(column_name [COMMENT column_comment], ...) ]
+			[COMMENT view_comment]
+			[TBLPROPERTIES (property_name = property_value, ...)]
+			AS SELECT ...;
+	e.g.
+		CREATE VIEW onion_referrers(url COMMENT 'URL of Referring page')
+		COMMENT 'Referrers to The Onion website'
+		AS
+		SELECT DISTINCT referrer_url
+		FROM page_view
+		WHERE page_url='http://www.theonion.com';
+	A CREATE VIEW statement will fail if the view's defining SELECT expression is invalid.
+	@@@ Note that a view is a purely logical object with no associated storage. (No support for materialized views is currently available in Hive.) 
+	@@@ Core: When a query references a view, the view's definition is evaluated in order to produce a set of rows for further processing by the query. (This is a conceptual description; in fact, as part of query optimization, Hive may combine the view's definition with the query's, e.g. pushing filters from the query down into the view.)
+	@@ A view may contain ORDER BY and LIMIT clauses. If a referencing query also contains these clauses, the query-level clauses are evaluated after the view clauses (and after any other operations in the query). For example, if a view specifies LIMIT 5, and a referencing query is executed as (select * from v LIMIT 10), then at most 5 rows will be returned.
+	@@@ A view's schema is frozen at the time the view is created; subsequent changes to underlying tables (e.g. adding a column) will not be reflected in the view's schema. If an underlying table is dropped or changed in an incompatible fashion, subsequent attempts to query the invalid view will fail.
+	@@ Views are read-only and may not be used as the target of LOAD/INSERT/ALTER.For changing metadata, see below:
+Alter View:
+	1)Alter View Properties
+		ALTER VIEW [db_name.]view_name SET TBLPROPERTIES table_properties;
+		table_properties:
+			: (property_name = property_value, property_name = property_value, ...)
+	2)Alter View As Select:
+		Alter View As Select changes the definition of a view, which must exist. The syntax is similar to that for CREATE VIEW and the effect is the same as for CREATE OR REPLACE VIEW.
+		@ Note: The view must already exist, and if the view has partitions, it could not be replaced by Alter View As Select.
+			Usage:ALTER VIEW [db_name.]view_name AS select_statement;
+Drop View:
+	@@ When dropping a view referenced by other views, no warning is given (the dependent views are left dangling as invalid and must be dropped or recreated by the user).
+SHOW:
+	Use SHOW CREATE TABLE to display the CREATE VIEW statement that created a view. 
+	As of Hive 2.2.0, SHOW VIEWS displays a list of views in a database.
+30.Index
+		https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Indexing
+		https://cwiki.apache.org/confluence/display/Hive/IndexDev
+		https://www.iteblog.com/archives/836.html
+	Versions: Hive indexing was added in version 0.7.0, and bitmap indexing was added in version 0.8.0.
+	@@@Core:The goal of Hive indexing is to improve the speed of query lookup on certain columns of a table. Without an index, queries with predicates like 'WHERE tab1.col1 = 10' load the entire table or partition and process all the rows. But if an index exists for col1, then only a portion of the file needs to be loaded and processed.
+	@@@Core:The improvement in query speed that an index can provide comes at the cost of additional processing to create the index and disk space to store the index.
+	@ Rebuild:If WITH DEFERRED REBUILD is specified on CREATE INDEX, then the newly created index is initially empty (regardless of whether the table contains any data). The ALTER INDEX ... REBUILD command can be used to build the index structure for all partitions or a single partition.
+	@ If data in the base table changes, then the REBUILD command must be used to bring the index up to date. This is an atomic operation, so if the table was previously indexed, and a rebuild fails, then the stale index remains untouched.
+	e.g.
+		1）Create then build, show formatted (with column names), and drop index:
+			hive> CREATE INDEX table02_index ON TABLE table02 (column3) AS 'COMPACT' WITH DEFERRED REBUILD;
+			hive> ALTER INDEX table02_index ON table2 REBUILD;    --导入数据
+			hive> SHOW FORMATTED INDEX ON table02;
+			hive> DROP INDEX table02_index ON table02;
+			
+		2）在表table04上创建索引，索引名叫table04_index，并且新建表table04-index_table，存储索引。
+			hive> CREATE INDEX table04_index ON TABLE table04 (column5) AS 'COMPACT' WITH DEFERRED REBUILD IN TABLE table04_index_table;
+*31.Macro
+	Usage:
+	CREATE TEMPORARY MACRO macro_name([col_name col_type, ...]) expression;
+	*CREATE TEMPORARY MACRO creates a macro using the given optional list of columns as inputs to the expression. Macros exist for the duration of the current session.
+	Examples:
+	CREATE TEMPORARY MACRO fixed_number() 42;
+	CREATE TEMPORARY MACRO string_len_plus_two(x string) length(x) + 2;
+	CREATE TEMPORARY MACRO simple_add (x int, y int) x + y;
+31.Function
+	https://cwiki.apache.org/confluence/display/Hive/HivePlugins
+	Temporary	Func:
+		You can use this function in Hive queries as long as the session lasts
+	Permanent Func:
+		Functions can be registered to the metastore, so they can be referenced in a query without having to create a temporary function each session.
+	Creation:
+		CREATE FUNCTION [db_name.]function_name AS class_name
+ 		 [USING JAR|FILE|ARCHIVE 'file_uri' [, JAR|FILE|ARCHIVE 'file_uri'] ];
+	Steps:
+	1) create a new class that extends UDF, with one or more methods named evaluate.
+			-----------------------------------------------
+			|	package com.example.hive.udf;
+			|	import org.apache.hadoop.hive.ql.exec.UDF;
+			|	import org.apache.hadoop.io.Text;
+			|	public final class Lower extends UDF {
+			|		public Text evaluate(final Text s) {
+			|			if (s == null) { return null; }
+			|			return new Text(s.toString().toLowerCase());
+			|		}
+			|	}
+			-------------------------------------------------
+	2) compiling your code to a jar and add this to the Hive classpath
+			hive> add jar dir/my_jar.jar;
+			Added my_jar.jar to class path
+	3) register your function
+			Hive is started up with your jars in the classpath, 
+			hive> create [temporary] function my_lower as 'com.example.hive.udf.Lower';
+32.Show 
+hive> SHOW DATABASE dbname01 LIKE 'emp*|*ees';
+hive> SHOW TABLES IN default 'emp*|user';
+hive> SHOW VIEWS LIKE 'test_view1|test_view2' FROM test1;
+hive> SHOW PARTITIONS databaseFoo.tableBar [PARTITION(ds='2010-03-03', hr='12')];
+hive> show table extended like part_table;
+			OK
+			tableName:part_table
+			owner:thejas
+			location:file:/tmp/warehouse/part_table
+			inputformat:org.apache.hadoop.mapred.TextInputFormat
+			outputformat:org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+			columns:struct columns { i32 i}
+			partitioned:true
+			partitionColumns:struct partition_columns { string d}
+			totalNumberFiles:1
+			totalFileSize:2
+			maxFileSize:2
+			minFileSize:2
+			lastAccessTime:0
+			lastUpdateTime:1459382233000
+			This command's output includes basic table information and file system information like totalNumberFiles, totalFileSize, maxFileSize, minFileSize,lastAccessTime, and lastUpdateTime. If partition is present, it will output the given partition's file system information instead of table's file system information.
+hive> SHOW TBLPROPERTIES tblname[("foo")];
+hive> SHOW CREATE TABLE ([db_name.]table_name|view_name);
+			SHOW CREATE TABLE shows the CREATE TABLE statement that creates a given table, or the CREATE VIEW statement that creates a given view.
+hive> SHOW [FORMATTED] (INDEX|INDEXES) ON table_with_index [(FROM|IN) db_name];
+hive> SHOW COLUMNS (FROM|IN) table_name [(FROM|IN) db_name];
+hive> SHOW FUNCTIONS "a.*";
+			SHOW FUNCTIONS lists all the user defined and builtin functions matching the regular expression. To get all functions use ".*"
+hive> Show Locks <table_name>...
+			SHOW LOCKS displays the locks on a table or partition.
+hive> SHOW CONF <configuration_name>;...
+hive> SHOW TRANSACTIONS;...
+hive> SHOW COMPACTIONS;...
 
+33.Describe 
+hive> DESCRIBE DATABASE [EXTENDED] db_name;
+hive> DESCRIBE [EXTENDED|FORMATTED] [db_name.]table_name[ col_name ( [.field_name] | [.'$elem$'] | [.'$key$'] | [.'$value$'] )* ];
+hive> DESCRIBE FORMATTED s_yhb_yhbpt.demo;
+hive> DESCRIBE [EXTENDED|FORMATTED] [db_name.]table_name [column_name] PARTITION partition_spec;
+hive> DESCRIBE formatted part_table partition (d='abc');
+			---------------------------------------------------------------------------
+			| OK
+			| # col_name              data_type               comment            
+      | 
+			| i                       int                                        
+      |
+			| # Partition Information         
+			| # col_name              data_type               comment            
+      |
+			| d                       string                                     
+      |
+			| # Detailed Partition Information                
+			| Partition Value:        [abc]                   
+			| Database:               default                 
+			| Table:                  part_table              
+			| CreateTime:             Wed Mar 30 16:57:14 PDT 2016    
+			| LastAccessTime:         UNKNOWN                 
+			| Protect Mode:           None                    
+			| Location:               file:/tmp/warehouse/part_table/d=abc    
+			| Partition Parameters:           
+			|				COLUMN_STATS_ACCURATE   true               
+			|				numFiles                1                  
+			|				numRows                 1                  
+			|				rawDataSize             1                  
+			|				totalSize               2                  
+			|				transient_lastDdlTime   1459382234         
+      |
+			| # Storage Information           
+			| SerDe Library:          org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe      
+			| InputFormat:            org.apache.hadoop.mapred.TextInputFormat        
+			| OutputFormat:           org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat      
+			| Compressed:             No                      
+			| Num Buckets:            -1                      
+			| Bucket Columns:         []                      
+			| Sort Columns:           []                      
+			| Storage Desc Params:            
+			|				serialization.format    1                  
+			| Time taken: 0.334 seconds, Fetched: 35 row(s)
+			---------------------------------------------------------------------------
+34.Transactions
+ 	SHOW TRANSACTIONS
+ 	Abort Transactions
+ 		ABORT TRANSACTIONS transactionID [, ...];e.g.ABORT TRANSACTIONS 0000007, 0000008, 0000010, 0000015;
 
 Problem:
 1. listbucketing
