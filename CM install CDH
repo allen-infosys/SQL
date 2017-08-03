@@ -1,0 +1,220 @@
+https://www.cloudera.com/documentation/enterprise/latest/topics/cm_ig_install_path_b.html
+ 	核心：安装方法
+安装方法很灵活，大致分为以下几种方法：
+Server ：
+1.	使用yum安装cm daemon和cm server，启动server，
+2.	自己下载packages来手动安装，并启动
+https://archive.cloudera.com/cm5/cm/5/
+Agent:
+1.	启动server后，使用cm图形化安装agent（agent节点需连接外网）；
+2.	Yum安装（agent节点需联网）
+3.	自己下载packages来手动安装，并启动(agent节点不需连接外网)
+https://archive.cloudera.com/cm5/cm/5/
+CDH and managed service:
+1.	在server所在节点，创建/opt/cloudera/parcel-repo目录，将parcel二进制包放入。Cm在图形安装引导程序中会自动扫描并分发到各节点，并且安装。
+优点：不需要下载。
+url: http://archive.cloudera.com/cdh5/parcels/
+2.	不作任何操作，配置好yum repo远程下载库，cm会从远程url自动下载。
+缺点：需要网速比较快，下载耗时。
+ 	Rquirments
+Linux版本 
+前提：
+Hosts(和hostname), user mode, jdk, mysql(server), ssh, ntp,防火墙(iptables,ip6tables,firewalld), selinux,版本一致。
+	Hosts:
+/etc/hosts:
+127.0.0.1 localhost.localdomain localhost
+10.10.165.80 internal0
+10.10.165.83 internal3
+10.10.165.84 internal4
+10.10.165.85 internal5
+10.10.165.86 internal6
+10.10.165.87 internal7
+10.10.165.88 internal8
+将/etc/hostname 改成相应的名字。
+	User mode
+参考：https://www.cloudera.com/documentation/enterprise/latest/topics/install_singleuser_reqts.html#xd_583c10bfdbd326ba--69adf108-1492ec0ce48--7ade
+In a conventional Cloudera Manager deployment, the Cloudera Manager Agent, which manages Hadoop processes on each host, runs as the root user. However, some environments restrict access to the root account.
+Cloudera Manager 5.3 and higher provides single user mode, which satisfies the requirements of such environments. In single user mode, the Cloudera Manager Agent and all the processes run by services managed by Cloudera Manager are started as a single configured user and group. Single user mode prioritizes isolation between Hadoop and the rest of the system over isolation between Hadoop processes running on the system.
+Within a Cloudera Manager deployment, single user mode is global and applies to all clusters managed by that instance of Cloudera Manager.
+通常情况下，如果服务器集群对root没有严格要求，那么我们就是用root；反之，使用单用户模式。
+	Jdk:  
+vi/etc/profile 
+#java
+export JAVA_HOME=/usr/java/jdk1.8.0_121
+export PATH=$JAVA_HOME/bin:$PATH
+export CLASSPATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+	mysql:
+注：只有cm server端才需要安装。
+下载安装mysql5.5并启动
+创建hadoop各服务相应的数据库
+Mysql>
+create database amon DEFAULT CHARACTER SET utf8;
+create database rman DEFAULT CHARACTER SET utf8;
+create database metastore DEFAULT CHARACTER SET utf8;
+create database sentry DEFAULT CHARACTER SET utf8; 
+create database nav DEFAULT CHARACTER SET utf8;
+create database navms DEFAULT CHARACTER SET utf8;
+grant all on amon.* TO 'amon'@'%' IDENTIFIED BY 'amon_password';
+grant all on rman.* TO 'rman'@'%' IDENTIFIED BY 'rman_password';
+grant all on metastore.* TO 'hive'@'%' IDENTIFIED BY 'hive_password';
+grant all on sentry.* TO 'sentry'@'%' IDENTIFIED BY 'sentry_password';
+grant all on nav.* TO 'nav'@'%' IDENTIFIED BY 'nav_password';
+grant all on navms.* TO 'navms'@'%' IDENTIFIED BY 'navms_password';
+create database hue default character set utf8 default collate utf8_general_ci;
+grant all on hue.* to 'hue'@'%' identified by 'huepassword';
+create database hive;
+grant all privileges on hive.* to 'hive'@'localhost' identified by 'hive';
+grant all privileges on hive.* to 'hive'@'%' identified by 'hive';
+select * from information_schema.schemata;
+	Jdbc
+下载并解压jdbc驱动程序到固定目录：
+cp mysql-connector-java-5.1.43/mysql-connector-java-5.1.43-bin.jar /usr/share/java/mysql-connector-java.jar  
+	ssh
+cm要求cm server所在节点，可以通过ssh随意访问集群内其他节点，所以：
+cm server key -> cm agent 
+ssh-keygen -t rsa -P '' -f ./.ssh/id_rsa
+ssh-copy-id gh0 -p 11122
+ssh-copy-id gh3 -p 11122
+ssh-copy-id gh4 -p 11122
+ssh-copy-id gh5 -p 11122
+ssh-copy-id gh6 -p 11122
+ssh-copy-id gh7 -p 11122
+ssh-copy-id gh8 -p 11122
+	ntp
+通常情况下，可以忽略此步骤，因为所有节点基本都是同步的。
+安装ntp服务：
+yum install ntp –y
+开机启动
+sudo chkconfig ntpd on
+启动和查看ntp命令：
+sudo systemctl start ntpd
+sudo systemctl status ntpd
+主节点：
+sudo ntpdate -u 202.120.2.101
+配置/etc/ntp.conf:
+driftfile /var/lib/ntp/drift
+restrict 127.0.0.1
+restrict -6 ::1
+restrict default nomodify notrap 
+server s2c.time.edu.cn prefer
+server 202.120.2.101
+server s2m.time.edu.cn
+includefile /etc/ntp/crypto/pw
+keys /etc/ntp/keys
+配置文件完成，保存退出，启动服务，执行如下命令：sudo systemctl start ntpd
+检查是否成功，用ntpstat命令查看同步状态，出现以下状态代表启动成功：
+synchronised to NTP server () at stratum 2
+time correct to within 74 ms
+polling server every 128 s
+如果出现异常请等待几分钟，一般等待5-10分钟才能同步。
+从节点：
+配置/etc/ntp.conf:
+driftfile /var/lib/ntp/drift
+restrict 127.0.0.1
+restrict -6 ::1
+restrict default kod nomodify notrap nopeer noquery
+restrict -6 default kod nomodify notrap nopeer noquery
+#这里是主节点的主机名或者ip
+server gh1
+includefile /etc/ntp/crypto/pw
+keys /etc/ntp/keys
+检查ntpstat
+这里可能出现同步失败的情况，请不要着急，一般是本地的ntp服务器还没有正常启动，一般需要等待5-10分钟才可以正常同步。启动服务：sudo systemctl start ntpd
+	防火墙
+必须关闭：firewalld, iptables, ip6tables, selinux，Centos默认使用firewalld+selinux
+关闭firewalld：
+systemctl stop firewalld.service #停止firewall
+systemctl disable firewalld.service #禁止firewall开机启动
+关闭selinux:
+vi /etc/selinux/config
+将SELINUX=enforcing改为SELINUX=disabled, 设置后需要重启才能生效
+ 
+Firewalld：
+http://www.cnblogs.com/knitmesh/p/5456852.html
+ 	配置CM server节点
+参考：
+https://www.cloudera.com/documentation/enterprise/latest/topics/cm_ig_install_path_b.html
+Mysql(80)
+安装mysql5.5并启动
+下载并解压jdbc驱动程序到固定目录：
+cp mysql-connector-java-5.1.43/mysql-connector-java-5.1.43-bin.jar /usr/share/java/mysql-connector-java.jar  
+systemctl status mysql
+
+创建hadoop各服务相应的数据库
+Mysql>
+create database amon DEFAULT CHARACTER SET utf8;
+create database rman DEFAULT CHARACTER SET utf8;
+create database metastore DEFAULT CHARACTER SET utf8;
+create database sentry DEFAULT CHARACTER SET utf8; 
+create database nav DEFAULT CHARACTER SET utf8;
+create database navms DEFAULT CHARACTER SET utf8;
+grant all on amon.* TO 'amon'@'%' IDENTIFIED BY 'amon_password';
+grant all on rman.* TO 'rman'@'%' IDENTIFIED BY 'rman_password';
+grant all on metastore.* TO 'hive'@'%' IDENTIFIED BY 'hive_password';
+grant all on sentry.* TO 'sentry'@'%' IDENTIFIED BY 'sentry_password';
+grant all on nav.* TO 'nav'@'%' IDENTIFIED BY 'nav_password';
+grant all on navms.* TO 'navms'@'%' IDENTIFIED BY 'navms_password';
+create database hue default character set utf8 default collate utf8_general_ci;
+grant all on hue.* to 'hue'@'%' identified by 'huepassword';
+create database hive;
+grant all privileges on hive.* to 'hive'@'localhost' identified by 'hive';
+grant all privileges on hive.* to 'hive'@'%' identified by 'hive';
+
+select * from information_schema.schemata;
+配置yum的repo文件
+在目录/etc/yum.repos.d/下，
+wget https://archive.cloudera.com/cm5/redhat/7/x86_64/cm/cloudera-manager.repo
+下载cm daemon 和 server
+yum install cloudera-manager-daemons cloudera-manager-server
+
+配置cm的数据库
+前提：cm server 和cm daemon安装好；jdbc jar包导入指定位置。
+用temp临时用户执行scm_prepare_database.sh脚本生成scm数据库，scm用户及相关：
+a.	Mysql>
+grant all on *.* to 'temp'@'%' identified by 'temp' with grant option;
+b.	/usr/share/cmf/schema/scm_prepare_database.sh mysql -h internal0 -utemp -ptemp --scm-host internal0 scm scm scm
+ 
+c.	Mysql>
+drop user 'temp'@'%';
+CDH存放到cm指定读取的目录
+ 
+Cm图形界面中，本地Parcel存储库路径：/opt/cloudera/parcel-repo,是cm读取本cdh parcel二进制包的地方；如果为空，就会在下面的远程Parcel存储库URL下载。
+CDH下载url:
+http://archive.cloudera.com/cdh5/parcels/
+将和cm相应版本的cdh parcel二进制包下载后放入/opt/cloudera/parcel-repo目录内:
+CDH-5.12.0-1.cdh5.12.0.p0.29-el7.parcel
+CDH-5.12.0-1.cdh5.12.0.p0.29-el7.parcel.sha(注意:下载的后缀为 .sha1需重命名为 .sha )
+manifest.json
+启动cm server
+service cloudera-scm-server start
+监听端口：
+http://intenal0:7180
+http://10.10.165.80:7180
+监听log:
+tail -f /var/log/cloudera-scm-server/cloudera-scm-server.log
+ 
+ 	配置CM agent节点
+Jdk1.8
+
+ 	重启server
+要清除server在数据库scm中的关于agent的元数据：
+Mysql>
+drop database scm;
+删除agent的元数据：
+rm –rf /run/cloudera-scm-agent/* 
+rm –rf /var/log/cloudera-scm-agent/* 
+rm –rf /var/lib/cloudera-scm-agent/*
+umount /run/cloudera-scm-agent/process ;
+pgrep -f supervisord
+ kill -9 id
+
+ 	Failed
+1.	Failed to start LSB: Cloudera SCM Agent.
+IP问题
+IP地址，主机名及hosts文件
+
+ 	添加新节点
+1.	设置IP, hostname, hosts
+2.	Ssh(master -> slave)
+3.	Jdk
+4.	Firewalld+selinux
